@@ -6,4 +6,42 @@ editor: visual
 
 ## Approach
 
+In this assignment we have to make use of the NYtimes api to answer a question through queries made through the api. The hardest part of this initally was coming up with a research question. I started off by testing out the api after creating an account. I tried using the article search api and found that using the filter did not really help that much for some of my inital examples. I tried restaurants and many of the articles seeming had nothing to do with restaurants.
+
+While doing some inital setting up of the api key in R I decide to use the usethis library to adjust the environment.\
+In the console I type the following to save a api key to my environment under "NYT_API_KEY". R may need to be restarted after. \
+
+```         
+library(usethis)
+edit_r_environ()
+```
+
+```{r , message=FALSE, warning=FALSE}
+library(httr)
+library(jsonlite)
+# These lines let us edit the environment to contain our key.
+```
+
+Now we have our key
+```{r}
+api_key <- Sys.getenv("NYT_API_KEY")
+```
+
+After some testing I found that the nytimes api works with this query list. Other ways of adding it as a header did not seem to work for me but here we get an example of the current hardcover-fiction books 
+```{r}
+url <- "https://api.nytimes.com/svc/books/v3/lists/current/hardcover-fiction.json"
+response <- GET(
+  url,
+  query = list(`api-key` = api_key)
+)
+status_code(response)
+```
+Looking at the data in our environment from this we can see there is a lot of extra information. I will figure out how to extract the data I need at a later point because I am still not certain of my question to ask. \
+```{r}
+books <- content(response)
+```
+
+I will probably look at the books to answer a question about comparing different types of books or I will use the article search api to look at how many articles are made each year with a certain filter and see how things have increased. For example given some of the recent news about insider trading maybe I will use insider trading as a filter for each year within the past 15 years and see how the occurence of these articles have either decreased or increased over time. I may pick something else as the search filter. \
+At this point I at least have the api set up minimally and I will work on parsing it and deciding on my specific question later.
+
 ## Codebase

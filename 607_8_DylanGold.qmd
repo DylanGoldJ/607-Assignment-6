@@ -1,6 +1,6 @@
 ---
 title: "607 Assignment 8 Dylan Gold"
-format: html
+format: pdf
 editor: visual
 ---
 
@@ -39,9 +39,10 @@ status_code(response)
 Looking at the data in our environment from this we can see there is a lot of extra information. I will figure out how to extract the data I need at a later point because I am still not certain of my question to ask. \
 ```{r}
 books <- content(response)
+head(books$results)
 ```
 
 I will probably look at the books to answer a question about comparing different types of books or I will use the article search api to look at how many articles are made each year with a certain filter and see how things have increased. For example given some of the recent news about insider trading maybe I will use insider trading as a filter for each year within the past 15 years and see how the occurence of these articles have either decreased or increased over time. I may pick something else as the search filter. \
-At this point I at least have the api set up minimally and I will work on parsing it and deciding on my specific question later.
+At this point I at least have the api set up minimally and I will work on parsing it and deciding on my specific question later.\
 
 ## Codebase

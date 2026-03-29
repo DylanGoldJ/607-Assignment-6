@@ -1,0 +1,318 @@
+---
+title: "607 Assignment 8 Dylan Gold"
+format: pdf
+editor: visual
+---
+
+## Approach
+
+In this assignment we have to make use of the NYtimes api to answer a question through queries made through the api. The hardest part of this initally was coming up with a research question. I started off by testing out the api after creating an account. I tried using the article search api and found that using the filter did not really help that much for some of my inital examples. I tried restaurants and many of the articles seeming had nothing to do with restaurants.
+
+While doing some inital setting up of the api key in R I decide to use the usethis library to adjust the environment.\
+In the console I type the following to save a api key to my environment under "NYT_API_KEY". R may need to be restarted after.\
+
+```         
+
+library(usethis)
+edit_r_environ()
+```
+
+```{r , message=FALSE, warning=FALSE}
+library(httr)
+library(jsonlite)
+```
+
+Now we have our key
+
+```{r}
+api_key <- Sys.getenv("NYT_API_KEY")
+```
+
+After some testing I found that the nytimes api works with this query list. Other ways of adding it as a header did not seem to work for me but here we get an example of the current hardcover-fiction books
+
+```{r}
+url <- "https://api.nytimes.com/svc/books/v3/lists/current/hardcover-fiction.json"
+response <- GET(
+  url,
+  query = list('api-key' = api_key) #here we list query parameters,
+)
+status_code(response)
+```
+
+Looking at the data in our environment from this we can see there is a lot of extra information. I will figure out how to extract the data I need at a later point because I am still not certain of my question to ask.\
+
+```{r}
+books <- content(response)
+head(books$results)
+```
+
+I will probably look at the books to answer a question about comparing different types of books or I will use the article search api to look at how many articles are made each year with a certain filter and see how things have increased. For example given some of the recent news about insider trading maybe I will use insider trading as a filter for each year within the past 15 years and see how the occurence of these articles have either decreased or increased over time. I may pick something else as the search filter.\
+At this point I at least have the api set up minimally and I will work on parsing it and deciding on my specific question later.\
+
+## Codebase
+
+First I will decide the question I want to answer. Given I have looked at several data sets relating to energy consumption, carbon emissions and other global warming adjacent topics this semester, I will try to answer: How has coverage of climate change changed over the past 10 years in the New York Times.\
+
+I will set the api key up again like I did in my approach
+
+```{r , message=FALSE, warning=FALSE}
+library(httr)
+library(jsonlite)
+library(dplyr)
+api_key <- Sys.getenv("NYT_API_KEY")
+
+```
+
+I will start off by testing the article search. It is different than the book request in that we do not need to put the query parameters in the url.\
+I believe this is because this has no required parameters. We should be able to add these in the query of the GET function.\
+I will test with the query as climate change. I will look in the year 2025
+
+```{r}
+url <- "https://api.nytimes.com/svc/search/v2/articlesearch.json"
+response <- GET(
+  url,
+  query = list(
+    'begin_date' = 20250101, # Start date 2025 01 01
+    'end_date' = 20251231, # End date 2025 12 31
+    'q' = "Climate change", #Query parameter
+    'api-key' = api_key
+    )
+)
+status_code(response)
+```
+
+I was not sure how to extract the data initially. Using ?GET to see the responder object and content function was alright but I was not sure of the type or encoding that I should be using. I used a LLM to help me create the dataframe because of this.  I used chatgpt to help generate the following code.
+
+```{r}
+data <- content(response, as = "text", encoding = "UTF-8") # Get data from request object
+json_data <- fromJSON(data, flatten = TRUE) # 
+df <- json_data$response$docs
+```
+
+Now that we have a data frame we can try to create a tidy data frame from this that contains the information we need. We are interested in seeing how the coverage of articles with climate change as a topic have increased or decreased on the NY times. We only really need the name and date the articles were published.\
+I will start off with selecting columns I want. We can see the columns with names()
+
+```{r}
+names(df)
+class(df)
+```
+
+I will select the headline.main, publication date, url.
+
+```{r}
+articles <- df %>% select(
+  headline.main, 
+  pub_date,
+  web_url
+)
+head(articles)
+```
+
+```{r}
+nrow(articles)
+```
+
+I had tried to adjust the initial request to a larger date range and realize that I am only getting 10 responses. This is because the api will give 10 articles at a time separated by pages. We can rerun the request and creation of the data frame with a different page to see how the articles are different to confirm this. I also put in 0 as the page to see if it matched the previous dataframe created and it does.
+
+```{r}
+url <- "https://api.nytimes.com/svc/search/v2/articlesearch.json"
+response <- GET(
+  url,
+  query = list(
+    'begin_date' = 20250101, # Start date 2025 01 01
+    'end_date' = 20251231, # End date 2025 12 31
+    'q' = "Climate change", #Query parameter
+    'page' = 100,
+    'api-key' = api_key
+    )
+)
+data <- content(response, as = "text", encoding = "UTF-8") # Get data from request object
+json_data <- fromJSON(data, flatten = TRUE) # 
+df <- json_data$response$docs
+articles <- df %>% select(
+  headline.main, 
+  pub_date,
+  web_url
+)
+
+articles
+```
+
+After testing 100 I realize that with our current search we are hitting articles that may not have to do with climate change. I need a more concrete way of searching for climate change articles. I asked an LLM to show me how to filter it by topic as climate change. I had tried to do it the way the llm suggested but at this point it was not giving me working responses.\
+I tried to add climate change as a filter aswell with global warming but I was still getting too many results.
+
+```{r}
+url <- "https://api.nytimes.com/svc/search/v2/articlesearch.json"
+response <- GET(
+  url,
+  query = list(
+    'begin_date' = 20250101, # Start date 2025 01 01
+    'end_date' = 20251231, # End date 2025 12 31
+    'q' = "Climate change", #Query parameter
+    'fq' = 'climate change, global warming', # Added for stricter search
+    'page' = 100,
+    'api-key' = api_key
+    )
+)
+data <- content(response, as = "text", encoding = "UTF-8") # Get data from request object
+json_data <- fromJSON(data, flatten = TRUE) # 
+df <- json_data$response$docs
+
+articles <- df %>% select(
+  headline.main, 
+  pub_date,
+  web_url
+)
+articles
+```
+
+I decide to change my approach. Rather than make the searches more specific I would attempt to collect more data. rather than by year I will try by month. After trying 100 pages in a 2 month frame I get null values. Not all the values are null, but it is good that the pages at the end are, otherwise we could not collect all the results. I also notice that I get better results if I just filter for climate change as well as the query.
+
+```{r}
+response <- GET(
+  url,
+  query = list(
+    'begin_date' = 20250101, # Start date 2025 01 01
+    'end_date' = 20250331, # End date 2025 12 31
+    'q' = "Climate change",
+    'fq' = 'climate change', # Added for stricter search
+    'page' = 0,
+    'api-key' = api_key
+    )
+)
+data <- content(response, as = "text", encoding = "UTF-8") # Get data from request object
+json_data <- fromJSON(data, flatten = TRUE) # 
+df <- json_data$response$docs
+
+articles <- df %>% select(
+  headline.main, 
+  pub_date,
+  web_url,
+  keywords # Added to see if we can use this to help determine which articles are climate change related.
+)
+articles
+```
+
+While this may be a solution for the problem of not having enough room for the articles, I also see how we are getting some articles that do not have to do with climate change.\
+I notice that there is a keywords column in the response I will look at this a little to see if climate change is a keyword that is used.
+
+```{r}
+articles$keywords
+```
+
+This shows us each article has a data frame that shows different types of tags. I now see that Global Warming is a popular keyword. Before I was looking for climate change. I will adjust my search to have climate change as the query and subject = "Global Warming" as a filter.
+
+```{r}
+response <- GET(
+  url,
+  query = list(
+    'begin_date' = 20250101, # Start date 2025 01 01
+    'end_date' = 20250331, # End date 2025 12 31
+    'q' = "Climate change",
+    'fq' = 'subject="Global Warming"', # Added for stricter search
+    'page' = 7,
+    'api-key' = api_key
+    )
+)
+data <- content(response, as = "text", encoding = "UTF-8") # Get data from request object
+json_data <- fromJSON(data, flatten = TRUE) # 
+df <- json_data$response$docs
+
+articles <- df %>% select(
+  headline.main, 
+  pub_date,
+  web_url,
+  keywords # Added to see if we can use this to help determine which articles are climate change related.
+)
+articles
+```
+
+I will now try to obtain the past 10 years of articles. I will create a function that will perform the query and pass it different ranges for each month with a sequence.
+
+```{r}
+get_response <- function(start, end) {
+  # List of dataframes for each page to fill, initially empty
+  article_list <- list()
+  # Boolean to keep track if we have more articles
+  more_articles <- TRUE 
+  # Page number to index
+  page_number <- 0
+  #I will use a while loop, this will let us get the pages with material but stop once we get the pages
+  while(more_articles){
+    response <- GET(
+      url,
+      query = list(
+        'begin_date' = start, # Start date 2025 01 01
+        'end_date' = end, # End date 2025 12 31
+        'q' = "Climate change",
+        'fq' = 'subject="Global Warming"', # Added for stricter search
+        'page' = page_number,
+        'api-key' = api_key
+        )
+    )
+    
+    data <- content(response, as = "text", encoding = "UTF-8") # Get data from request object
+    json_data <- fromJSON(data, flatten = TRUE) # 
+    df <- json_data$response$docs
+    
+    #Here check if the dataframe is null. If the page is empty it will be null. and we stop searching
+    if (!is.null(df)){
+    article <- df %>% select( #Single article
+      headline.main, 
+      pub_date,
+      web_url
+    )
+    #update the list
+    article_list[[length(article_list) + 1]] <- article
+    #Increment page_number
+    page_number <- page_number + 1
+    }
+    else{ # Set more_articles to false if we have an empty dataframe
+      more_articles <- FALSE
+    }
+  }
+  
+  return(bind_rows(article_list)) # Returns the list combined into a single dataframe
+}
+```
+
+I will test the function. It should get all pages for a range given.
+
+```{r}
+article_pages <- get_response(20250101, 20250331)
+```
+
+```{r}
+article_pages2 <- get_response(20200101, 20200331)
+```
+
+We can see if we got more than the initial 10 pages and it seems we did.
+
+```{r}
+head(article_pages)
+nrow(article_pages)
+```
+
+At this point I see that I am stuck at 50 observations in my dataframes. This means I am only getting 5 pages. In the first example I should be getting more than 5 pages. It is likely because I am being rate limited somehow. I decide I need to take a different approach. I decide to leave what I wrote so far in to show my process. It has also given me a better understanding of the data.\
+\## Codebase Attempt #2 There is another api url from the new york times that gives us all the articles written in a certain month and year. I will use this along with the keyword to see the trend of published articles with the keyword subject "Global Warming".\
+I will create a function that gets all these articles for a certain month an year
+
+```{r}
+
+url <- "https://api.nytimes.com/svc/archive/v1/2025/1.json "
+response <- GET(
+  url,
+  query = list('api-key' = api_key) 
+)
+status_code(response)
+data <- content(response, as = "text", encoding = "UTF-8") # Get data from request object
+json_data <- fromJSON(data, flatten = TRUE) # 
+df <- json_data$response$docs
+
+articles <- df %>% select(
+  headline.main, 
+  pub_date,
+  web_url
+)
+articles
+```

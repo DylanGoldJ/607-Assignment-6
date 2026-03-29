@@ -6,7 +6,7 @@ editor: visual
 
 ## Approach
 
-In this assignment we have to make use of the NYtimes api to answer a question through queries made through the api. The hardest part of this initally was coming up with a research question. I started off by testing out the api after creating an account. I tried using the article search api and found that using the filter did not really help that much for some of my inital examples. I tried restaurants and many of the articles seeming had nothing to do with restaurants.
+In this assignment we have to make use of the NYtimes api to answer a question through queries made through the api. The hardest part of this initially was coming up with a research question. I started off by testing out the api after creating an account. I tried using the article search api and found that using the filter did not really help that much for some of my initial examples. I tried restaurants and many of the articles seeming had nothing to do with restaurants.
 
 While doing some inital setting up of the api key in R I decide to use the usethis library to adjust the environment.\
 In the console I type the following to save a api key to my environment under "NYT_API_KEY". R may need to be restarted after.\
@@ -46,273 +46,207 @@ books <- content(response)
 head(books$results)
 ```
 
-I will probably look at the books to answer a question about comparing different types of books or I will use the article search api to look at how many articles are made each year with a certain filter and see how things have increased. For example given some of the recent news about insider trading maybe I will use insider trading as a filter for each year within the past 15 years and see how the occurence of these articles have either decreased or increased over time. I may pick something else as the search filter.\
+I will probably look at the books to answer a question about comparing different types of books or I will use the article search api to look at how many articles are made each year with a certain filter and see how things have increased. For example given some of the recent news about insider trading maybe I will use insider trading as a filter for each year within the past 15 years and see how the occurrence of these articles have either decreased or increased over time. I may pick something else as the search filter.\
 At this point I at least have the api set up minimally and I will work on parsing it and deciding on my specific question later.\
 
 ## Codebase
 
-First I will decide the question I want to answer. Given I have looked at several data sets relating to energy consumption, carbon emissions and other global warming adjacent topics this semester, I will try to answer: How has coverage of climate change changed over the past 10 years in the New York Times.\
+First I will decide the question I want to answer. Given I have looked at several data sets relating to energy consumption, carbon emissions and other global warming adjacent topics this semester, I will try to answer: How has coverage of climate change changed over the past 10 years in the New York Times. I spent a while trying to answer this question but realized that getting all the articles that with the keyword subject of "Global Warming" would cause me to be rate limited. I probably could have looked one day at a time at articles slowly but I did not want to continue trying to fix a solution that may have not been viable due to a rate limit.\
 
-I will set the api key up again like I did in my approach
+So the question I am interested in answering is: What publishers and authors of books are most often best sellers within the last year?
+There are many different genres of best sellers. I am hopefully expecting to see that certain authors or publishers have a higher rate of best sellers, or learn that no specific authors or publishers have several best sellers in recent years.
+We can start off with an API call in the books api of the NYT times.\
+I already have my account and key set up from the approach.\
 
 ```{r , message=FALSE, warning=FALSE}
 library(httr)
 library(jsonlite)
 library(dplyr)
+library(tidyr)
+library(gt)
 api_key <- Sys.getenv("NYT_API_KEY")
 
 ```
 
-I will start off by testing the article search. It is different than the book request in that we do not need to put the query parameters in the url.\
-I believe this is because this has no required parameters. We should be able to add these in the query of the GET function.\
-I will test with the query as climate change. I will look in the year 2025
+There are 2 calls we can make in this API a specific date and the specific best seller genre, or an overview which just takes a date and shows all the best seller genres.
+I will be using the overview URL, which just takes a year and month to give all the best sellers (every genre) for I will start off with trying to get a specific year and month into a data frame format that is suitable.
 
 ```{r}
-url <- "https://api.nytimes.com/svc/search/v2/articlesearch.json"
+url <- "https://api.nytimes.com/svc/books/v3/lists/overview.json"
 response <- GET(
   url,
-  query = list(
-    'begin_date' = 20250101, # Start date 2025 01 01
-    'end_date' = 20251231, # End date 2025 12 31
-    'q' = "Climate change", #Query parameter
+  query = list( # We can put parameters here, api-key is needed and we can specify a date.
+    'published_date' = '2025-01-01',
     'api-key' = api_key
-    )
+    ),
 )
 status_code(response)
 ```
-
-I was not sure how to extract the data initially. Using ?GET to see the responder object and content function was alright but I was not sure of the type or encoding that I should be using. I used a LLM to help me create the dataframe because of this.  I used chatgpt to help generate the following code.
-
+We have a good response code, we can try to extract the data. I can put the results into a data frame and start to inspect how to get the data we need.
 ```{r}
 data <- content(response, as = "text", encoding = "UTF-8") # Get data from request object
-json_data <- fromJSON(data, flatten = TRUE) # 
-df <- json_data$response$docs
+json_results <- fromJSON(data, flatten = TRUE) # 
 ```
 
-Now that we have a data frame we can try to create a tidy data frame from this that contains the information we need. We are interested in seeing how the coverage of articles with climate change as a topic have increased or decreased on the NY times. We only really need the name and date the articles were published.\
-I will start off with selecting columns I want. We can see the columns with names()
-
+We have the json data of the response, we can extract the results. The results have many values describng the dates and a list containing information about each of the best seller collections. I will extract this data. Note that books is a lists type
 ```{r}
-names(df)
-class(df)
+books_df <- json_results$results$lists
+books_df
+names(book_df)
 ```
-
-I will select the headline.main, publication date, url.
-
+We can see there there are 18 rows containing each of the different best seller categories. Each of the rows have a books column containing the books. I will take a closer look at this. I will look at the first row's book column.
 ```{r}
-articles <- df %>% select(
-  headline.main, 
-  pub_date,
-  web_url
+book1 <- book_df$books[1]
+head(book1)
+```
+We have a data frame that contains information about each book in this list. I will select the rows we want just to visuallize it better. I also notice that the price is defaulting to 0. If the price had shown maybe we could have done some analysis on that. There is also a weeks on list which is important for books that have been on more than once.
+```{r}
+book1_df <- as.data.frame(book1) %>%
+  select(
+    title = title,
+    author = author,
+    publisher = publisher,
+    rank = rank,
+    weeks_on_list = weeks_on_list
 )
-head(articles)
+head(book1_df)
 ```
-
+Now that we see the formatting of the lists, we can try to extract each of these into the layer above. We can use the unnest function for this which will convert a list in a column into their own column values for each list item. I will also select columns.
 ```{r}
-nrow(articles)
-```
-
-I had tried to adjust the initial request to a larger date range and realize that I am only getting 10 responses. This is because the api will give 10 articles at a time separated by pages. We can rerun the request and creation of the data frame with a different page to see how the articles are different to confirm this. I also put in 0 as the page to see if it matched the previous dataframe created and it does.
-
-```{r}
-url <- "https://api.nytimes.com/svc/search/v2/articlesearch.json"
-response <- GET(
-  url,
-  query = list(
-    'begin_date' = 20250101, # Start date 2025 01 01
-    'end_date' = 20251231, # End date 2025 12 31
-    'q' = "Climate change", #Query parameter
-    'page' = 100,
-    'api-key' = api_key
+books_unnested <- books_df %>%
+  unnest(books) %>%
+    select(
+      category = list_name,
+      title = title,
+      author = author,
+      publisher = publisher,
+      updated = updated,
+      rank = rank,
+      weeks_on_list = weeks_on_list
     )
-)
-data <- content(response, as = "text", encoding = "UTF-8") # Get data from request object
-json_data <- fromJSON(data, flatten = TRUE) # 
-df <- json_data$response$docs
-articles <- df %>% select(
-  headline.main, 
-  pub_date,
-  web_url
-)
-
-articles
+head(books_unnested)
 ```
+Now we have our books in a format that is easier to work with. Something to note is that some categories are updated MONTHLY rather than WEEKLY. Lets take a look at those. \
+We can see that the data is formatted such that there is 
+```{r}
+head(books_unnested %>% 
+       filter(
+        updated == "MONTHLY"
+        )
+     )
+```
+We also are missing the date. The date was in the results that are a layer above this one. I will create a function to get the best sellers of a specific date. \
+While making the function to accept the date I notice that the results also have the next date stored in them. Using this we can call the function with the next date repeatedly. \
+I decide to make a nested function to perform this. The outer function will contain the date range we want to search through. It will manage the sequential calling of the helper function.
+The helper will be responsible for adding data frames to a list, returning the updated list and the previous publication date.
 
-After testing 100 I realize that with our current search we are hitting articles that may not have to do with climate change. I need a more concrete way of searching for climate change articles. I asked an LLM to show me how to filter it by topic as climate change. I had tried to do it the way the llm suggested but at this point it was not giving me working responses.\
-I tried to add climate change as a filter aswell with global warming but I was still getting too many results.
 
 ```{r}
-url <- "https://api.nytimes.com/svc/search/v2/articlesearch.json"
-response <- GET(
-  url,
-  query = list(
-    'begin_date' = 20250101, # Start date 2025 01 01
-    'end_date' = 20251231, # End date 2025 12 31
-    'q' = "Climate change", #Query parameter
-    'fq' = 'climate change, global warming', # Added for stricter search
-    'page' = 100,
-    'api-key' = api_key
-    )
-)
-data <- content(response, as = "text", encoding = "UTF-8") # Get data from request object
-json_data <- fromJSON(data, flatten = TRUE) # 
-df <- json_data$response$docs
 
-articles <- df %>% select(
-  headline.main, 
-  pub_date,
-  web_url
-)
-articles
-```
-
-I decide to change my approach. Rather than make the searches more specific I would attempt to collect more data. rather than by year I will try by month. After trying 100 pages in a 2 month frame I get null values. Not all the values are null, but it is good that the pages at the end are, otherwise we could not collect all the results. I also notice that I get better results if I just filter for climate change as well as the query.
-
-```{r}
-response <- GET(
-  url,
-  query = list(
-    'begin_date' = 20250101, # Start date 2025 01 01
-    'end_date' = 20250331, # End date 2025 12 31
-    'q' = "Climate change",
-    'fq' = 'climate change', # Added for stricter search
-    'page' = 0,
-    'api-key' = api_key
-    )
-)
-data <- content(response, as = "text", encoding = "UTF-8") # Get data from request object
-json_data <- fromJSON(data, flatten = TRUE) # 
-df <- json_data$response$docs
-
-articles <- df %>% select(
-  headline.main, 
-  pub_date,
-  web_url,
-  keywords # Added to see if we can use this to help determine which articles are climate change related.
-)
-articles
-```
-
-While this may be a solution for the problem of not having enough room for the articles, I also see how we are getting some articles that do not have to do with climate change.\
-I notice that there is a keywords column in the response I will look at this a little to see if climate change is a keyword that is used.
-
-```{r}
-articles$keywords
-```
-
-This shows us each article has a data frame that shows different types of tags. I now see that Global Warming is a popular keyword. Before I was looking for climate change. I will adjust my search to have climate change as the query and subject = "Global Warming" as a filter.
-
-```{r}
-response <- GET(
-  url,
-  query = list(
-    'begin_date' = 20250101, # Start date 2025 01 01
-    'end_date' = 20250331, # End date 2025 12 31
-    'q' = "Climate change",
-    'fq' = 'subject="Global Warming"', # Added for stricter search
-    'page' = 7,
-    'api-key' = api_key
-    )
-)
-data <- content(response, as = "text", encoding = "UTF-8") # Get data from request object
-json_data <- fromJSON(data, flatten = TRUE) # 
-df <- json_data$response$docs
-
-articles <- df %>% select(
-  headline.main, 
-  pub_date,
-  web_url,
-  keywords # Added to see if we can use this to help determine which articles are climate change related.
-)
-articles
-```
-
-I will now try to obtain the past 10 years of articles. I will create a function that will perform the query and pass it different ranges for each month with a sequence.
-
-```{r}
-get_response <- function(start, end) {
-  # List of dataframes for each page to fill, initially empty
-  article_list <- list()
-  # Boolean to keep track if we have more articles
-  more_articles <- TRUE 
-  # Page number to index
-  page_number <- 0
-  #I will use a while loop, this will let us get the pages with material but stop once we get the pages
-  while(more_articles){
+get_books_df<- function(date, weeks){
+  # Here I define the helper function
+  #Takes date in YYYY-MM-DD format(string), returns the given list with the dataframe added, as well as the previous publication date in a list
+  get_books_date <- function(date, books_list){ 
+    url <- "https://api.nytimes.com/svc/books/v3/lists/overview.json"
     response <- GET(
       url,
-      query = list(
-        'begin_date' = start, # Start date 2025 01 01
-        'end_date' = end, # End date 2025 12 31
-        'q' = "Climate change",
-        'fq' = 'subject="Global Warming"', # Added for stricter search
-        'page' = page_number,
+      query = list( # We can put parameters here, api-key is needed and we can specify a date.
+        'published_date' = date,
         'api-key' = api_key
         )
     )
-    
     data <- content(response, as = "text", encoding = "UTF-8") # Get data from request object
-    json_data <- fromJSON(data, flatten = TRUE) # 
-    df <- json_data$response$docs
-    
-    #Here check if the dataframe is null. If the page is empty it will be null. and we stop searching
-    if (!is.null(df)){
-    article <- df %>% select( #Single article
-      headline.main, 
-      pub_date,
-      web_url
-    )
-    #update the list
-    article_list[[length(article_list) + 1]] <- article
-    #Increment page_number
-    page_number <- page_number + 1
-    }
-    else{ # Set more_articles to false if we have an empty dataframe
-      more_articles <- FALSE
-    }
+    json_results <- fromJSON(data, flatten = TRUE) # 
+    books_results <- json_results$results
+    # We need the save the published_date from this layer, the api describes this as "When the list was in print."
+    publish_date <- books_results$published_date
+    # I will also save next and previous publish dates
+    next_publish_date <- books_results$next_published_date #UNUSED
+    previous_publish_date <- books_results$previous_published_date
+    # Now we can create the dataframe
+    books_df <- json_results$results$lists
+    books_unnested <- books_df %>%
+    unnest(books) %>%
+      select(
+        category = list_name,
+        title = title,
+        author = author,
+        publisher = publisher,
+        updated = updated,
+        rank = rank,
+        weeks_on_list = weeks_on_list
+      ) 
+    books_unnested$publish_date = publish_date
+    books_list[[length(books_list) + 1]] <- books_unnested
+    return(list(books_list, previous_publish_date))
   }
+  # I need the outer function to create the list that we are adding to.
+  books_list <- list()
+  # It will create the book list with calls to get_books_date, starting at the date given, for weeks as the number of times we go back.
+  date_index = date
+  while(weeks > 0){
+    books_date_results <- get_books_date(date_index, books_list)
+    weeks <- weeks - 1 #Decrease the weeks counter
+    books_list <- books_date_results[[1]] # Update book List 
+    date_index <- books_date_results[[2]] # Update the index to the previous date
+    Sys.sleep(10) # Sleep to prevent rate limit
+  }
+  #Now we should have a books_list that contains all our dataframes.
+  # Return these rows after being combined
+  return(bind_rows(books_list))
+}  
   
-  return(bind_rows(article_list)) # Returns the list combined into a single dataframe
-}
 ```
-
-I will test the function. It should get all pages for a range given.
+I will use this to get the past 6 weeks from today's date. I added a sleep to prevent the rate limit to the function but it will seemingly randomly break if too many weeks are done at once.
+```{r}
+books_df <- get_books_df("2026-03-29", 6)
+```
+I believe that having 6 weeks of data will provide practically the same steps in analysis so I will stick with 6 weeks for now.
 
 ```{r}
-article_pages <- get_response(20250101, 20250331)
+head(books_df)
 ```
-
+Now that we have a dataframe in a tidy format we can start to perform some analysis.\
+My initial question was which authors and publishers are published the most.\
+We can group by author and publisher (separately and sum to get the count) to see who was published the most
 ```{r}
-article_pages2 <- get_response(20200101, 20200331)
+author_count <- books_df %>%
+  group_by(author) %>%
+  summarize(
+    times_published = n()
+  ) %>%
+  arrange(desc(times_published))
+head(author_count)
 ```
-
-We can see if we got more than the initial 10 pages and it seems we did.
-
+I will make a table to show this
 ```{r}
-head(article_pages)
-nrow(article_pages)
+author_count %>%
+  gt() %>%
+      cols_label(
+        'author' = "Author",
+        'times_published' = "Times published"
+      ) %>%
+      tab_header(title = md("Count of publications in NYTimes Best Sellers (Past 6 weeks)")) %>%
+      tab_options(container.height = 500, container.overflow.y = TRUE) # Set container height and container overflow to add scrolling for large tables.
 ```
-
-At this point I see that I am stuck at 50 observations in my dataframes. This means I am only getting 5 pages. In the first example I should be getting more than 5 pages. It is likely because I am being rate limited somehow. I decide I need to take a different approach. I decide to leave what I wrote so far in to show my process. It has also given me a better understanding of the data.\
-\## Codebase Attempt #2 There is another api url from the new york times that gives us all the articles written in a certain month and year. I will use this along with the keyword to see the trend of published articles with the keyword subject "Global Warming".\
-I will create a function that gets all these articles for a certain month an year
-
+I will make another table for the publishers
 ```{r}
+publisher_count <- books_df %>%
+  group_by(publisher) %>%
+  summarize(
+    times_published = n()
+  ) %>%
+  arrange(desc(times_published))
+#Display in table
+publisher_count %>%
+  gt() %>%
+      cols_label(
+        'publisher' = "Publisher",
+        'times_published' = "Times published"
+      ) %>%
+      tab_header(title = md("Count of publications in NYTimes Best Sellers (Past 6 weeks)")) %>%
+      tab_options(container.height = 500, container.overflow.y = TRUE) # Set container height and container overflow to add scrolling for large tables.
 
-url <- "https://api.nytimes.com/svc/archive/v1/2025/1.json "
-response <- GET(
-  url,
-  query = list('api-key' = api_key) 
-)
-status_code(response)
-data <- content(response, as = "text", encoding = "UTF-8") # Get data from request object
-json_data <- fromJSON(data, flatten = TRUE) # 
-df <- json_data$response$docs
-
-articles <- df %>% select(
-  headline.main, 
-  pub_date,
-  web_url
-)
-articles
 ```
+
+

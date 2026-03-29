@@ -1,6 +1,6 @@
 ---
 title: "607 Assignment 8 Dylan Gold"
-format: pdf
+format: html
 editor: visual
 ---
 
@@ -91,12 +91,12 @@ json_results <- fromJSON(data, flatten = TRUE) #
 We have the json data of the response, we can extract the results. The results have many values describng the dates and a list containing information about each of the best seller collections. I will extract this data. Note that books is a lists type
 ```{r}
 books_df <- json_results$results$lists
-books_df
-names(book_df)
+head(books_df)
+names(books_df)
 ```
 We can see there there are 18 rows containing each of the different best seller categories. Each of the rows have a books column containing the books. I will take a closer look at this. I will look at the first row's book column.
 ```{r}
-book1 <- book_df$books[1]
+book1 <- books_df$books[1]
 head(book1)
 ```
 We have a data frame that contains information about each book in this list. I will select the rows we want just to visuallize it better. I also notice that the price is defaulting to 0. If the price had shown maybe we could have done some analysis on that. There is also a weeks on list which is important for books that have been on more than once.
@@ -127,7 +127,7 @@ books_unnested <- books_df %>%
 head(books_unnested)
 ```
 Now we have our books in a format that is easier to work with. Something to note is that some categories are updated MONTHLY rather than WEEKLY. Lets take a look at those. \
-We can see that the data is formatted such that there is 
+We can see that the data is formatted such that categories that are updated monthly have a value of 0 for weeks on list. I will leave this for now because I dont intend to use that column.
 ```{r}
 head(books_unnested %>% 
        filter(
@@ -208,7 +208,7 @@ head(books_df)
 ```
 Now that we have a dataframe in a tidy format we can start to perform some analysis.\
 My initial question was which authors and publishers are published the most.\
-We can group by author and publisher (separately and sum to get the count) to see who was published the most
+We can group by author and publisher (separately and sum to get the count) to see who was published the most.
 ```{r}
 author_count <- books_df %>%
   group_by(author) %>%
@@ -229,7 +229,7 @@ author_count %>%
       tab_header(title = md("Count of publications in NYTimes Best Sellers (Past 6 weeks)")) %>%
       tab_options(container.height = 500, container.overflow.y = TRUE) # Set container height and container overflow to add scrolling for large tables.
 ```
-I will make another table for the publishers
+I will make another table for the publishers, Note that those who are featured heavily in categories that are updated monthly have an advantage due to those categories being published multiple weeks for a month. 
 ```{r}
 publisher_count <- books_df %>%
   group_by(publisher) %>%
@@ -248,5 +248,15 @@ publisher_count %>%
       tab_options(container.height = 500, container.overflow.y = TRUE) # Set container height and container overflow to add scrolling for large tables.
 
 ```
+We can see some of the more popular authors and publishers. Scholastic is a publisher that is well known that has many recent publications in the NYTimes best sellers. I am not familiar with the authors. Looking up the top recently published author Matt Dinniman, He has a popular science fantasy series. Some other authors and publishers recently with many publications on the NYTimes, are Freida McFadden, Rachel Reid, Simon & Schuster, Andrew Ross Sorkin.
+
+## Conclusion
+In conclusion I was able to use a public api, the NYTimes api to collect data, filter the data based on my needs, use functions like unnest to extract data from the inital api response and put that data into a dataframe to answer a question. By using libraries like httr and jsonlite I was able to get the data and I used my knowledge practiced in other assignments to use tidyr and dplyr to turn the data into a tidy format. Then I answered the questions I made looking at the frequency of publishers and authors in the best sellers of the NYTimes. I had to limit my question a little to a smaller timeframe due to what I assume is a rate limit of the API. Some ways I could expand on this assignment is to have more weeks by increasing the time in between api requests, I could also examine the data further, looking at specific categories and books overtime.
+
+
+
+
+
+
 
 
